@@ -29,18 +29,10 @@ const DEFAULT_CATEGORIES = [
 const DEFAULT_USERS = [
   {
     name: 'System Admin',
-    email: 'admin@exam.com',
-    password: 'Admin@123',
+    email: 'admin@examtest.com',
+    password: 'Pass@123',
     phone: '9876543210',
     role: 'admin',
-    status: 'active'
-  },
-  {
-    name: 'Test Student',
-    email: 'user@exam.com',
-    password: 'User@123',
-    phone: '9123456789',
-    role: 'user',
     status: 'active'
   }
 ];
@@ -402,12 +394,14 @@ export async function initializeFirestoreIfNeeded() {
       }
     }
 
-    // 2. Check & seed default users
-    const userSnap = await getDocs(collection(db, 'users'));
-    if (userSnap.empty) {
-      for (const u of DEFAULT_USERS) {
-        await addDoc(collection(db, 'users'), { ...u, createdAt: new Date().toISOString() });
-      }
+    // 2. Check & seed admin user
+    const adminQ = query(collection(db, 'users'), where('email', '==', 'admin@examtest.com'));
+    const adminSnap = await getDocs(adminQ);
+    if (adminSnap.empty) {
+      await addDoc(collection(db, 'users'), {
+        ...DEFAULT_USERS[0],
+        createdAt: new Date().toISOString()
+      });
     }
 
     // 3. Check & seed default test

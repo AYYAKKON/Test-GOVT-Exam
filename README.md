@@ -165,17 +165,14 @@ Open `http://localhost:3000` in your web browser.
 
 ---
 
-## 🔑 Default Login Credentials
+## 🔑 Admin Login Credentials
 
-### 🛡️ Admin Account
-- **Email**: `admin@exam.com`
-- **Password**: `Admin@123`
+### 🛡️ Admin Account (Stored in Firebase Firestore)
+- **Email**: `admin@examtest.com`
+- **Password**: `Pass@123`
 
-### 👤 Student Account
-- **Email**: `user@exam.com`
-- **Password**: `User@123`
-
-*(Note: The login page includes 1-click Quick Demo buttons for both Admin and Student accounts).*
+### 👤 Student Candidates
+Students register their own account on the registration page (`/register`) with their own credentials.
 
 ---
 
