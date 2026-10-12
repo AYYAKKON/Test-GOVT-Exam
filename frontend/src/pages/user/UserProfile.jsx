@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
-import API from '../../services/api';
+import { updateUser } from '../../services/userService';
 import { User, Mail, Phone, Lock, Save, CheckCircle, Shield } from 'lucide-react';
 
 const UserProfile = () => {
@@ -20,8 +20,8 @@ const UserProfile = () => {
     setLoading(true);
 
     try {
-      const res = await API.put(`/users/${user._id}`, formData);
-      updateUserProfile(res.data);
+      const res = await updateUser(user._id, formData);
+      updateUserProfile(res);
       setMsg({ type: 'success', text: 'Profile updated successfully!' });
       setFormData(prev => ({ ...prev, password: '' }));
     } catch (err) {

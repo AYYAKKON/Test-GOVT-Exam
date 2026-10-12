@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Sidebar from '../../components/Sidebar';
-import { getTestByIdAdmin, updateTest } from '../../services/testService';
+import { getTestByIdAdmin, updateTest, deleteQuestion } from '../../services/testService';
 import { getCategories } from '../../services/userService';
 import API from '../../services/api';
 import { Edit3, Save, ArrowLeft, Plus, Trash2, CheckCircle2, Clock } from 'lucide-react';
@@ -73,7 +73,7 @@ const EditTest = () => {
   const handleDeleteQuestion = async (qId) => {
     if (!window.confirm('Delete this question from database?')) return;
     try {
-      await API.delete(`/questions/${qId}`);
+      await deleteQuestion(qId);
       setQuestions(prev => prev.filter(q => q._id !== qId));
     } catch (err) {
       alert('Failed to delete question.');

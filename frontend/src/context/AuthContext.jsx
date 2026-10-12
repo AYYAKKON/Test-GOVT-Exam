@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import API from '../services/api';
+import { fbLogin, fbRegister } from '../firebase/dbService';
 
 const AuthContext = createContext();
 
@@ -20,17 +20,17 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    const res = await API.post('/auth/login', { email, password });
-    setUser(res.data);
-    localStorage.setItem('govt_exam_user', JSON.stringify(res.data));
-    return res.data;
+    const userData = await fbLogin(email, password);
+    setUser(userData);
+    localStorage.setItem('govt_exam_user', JSON.stringify(userData));
+    return userData;
   };
 
   const register = async (userData) => {
-    const res = await API.post('/auth/register', userData);
-    setUser(res.data);
-    localStorage.setItem('govt_exam_user', JSON.stringify(res.data));
-    return res.data;
+    const newUser = await fbRegister(userData);
+    setUser(newUser);
+    localStorage.setItem('govt_exam_user', JSON.stringify(newUser));
+    return newUser;
   };
 
   const logout = () => {

@@ -25,6 +25,7 @@ backend/uploads/*.pdf
 !backend/uploads/sample_ssc_cgl_test.pdf
 
 # System files
+.netlify/
 .DS_Store
 Thumbs.db
 .idea/

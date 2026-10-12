@@ -1,26 +1,39 @@
-import API from './api';
+import {
+  fbSubmitTestAttempt,
+  fbGetUserHistory,
+  fbGetAttemptDetails,
+  fbGetAdminTestResults,
+  fbGetAdminDashboardStats
+} from '../firebase/dbService';
+
+const getStoredUser = () => {
+  try {
+    const str = localStorage.getItem('govt_exam_user');
+    return str ? JSON.parse(str) : null;
+  } catch (e) {
+    return null;
+  }
+};
 
 export const submitTestAttempt = async (attemptData) => {
-  const res = await API.post('/attempts/submit', attemptData);
-  return res.data;
+  const currentUser = getStoredUser();
+  return await fbSubmitTestAttempt(attemptData, currentUser);
 };
 
 export const getUserHistory = async () => {
-  const res = await API.get('/attempts/history');
-  return res.data;
+  const currentUser = getStoredUser();
+  if (!currentUser?._id) return [];
+  return await fbGetUserHistory(currentUser._id);
 };
 
 export const getAttemptDetails = async (id) => {
-  const res = await API.get(`/attempts/${id}`);
-  return res.data;
+  return await fbGetAttemptDetails(id);
 };
 
 export const getAdminTestResults = async (params) => {
-  const res = await API.get('/attempts/admin/all', { params });
-  return res.data;
+  return await fbGetAdminTestResults(params);
 };
 
 export const getAdminDashboardStats = async () => {
-  const res = await API.get('/attempts/admin/stats');
-  return res.data;
+  return await fbGetAdminDashboardStats();
 };

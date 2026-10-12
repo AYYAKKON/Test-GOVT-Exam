@@ -1,41 +1,42 @@
-import API from './api';
+import {
+  fbGetUsers,
+  fbGetUserById,
+  fbCreateUser,
+  fbUpdateUser,
+  fbDeleteUser,
+  fbGetCategories,
+  fbCreateCategory,
+  fbDeleteCategory
+} from '../firebase/dbService';
 
 export const getUsers = async (params) => {
-  const res = await API.get('/users', { params });
-  return res.data;
+  return await fbGetUsers(params);
 };
 
 export const getUserById = async (id) => {
-  const res = await API.get(`/users/${id}`);
-  return res.data;
+  return await fbGetUserById(id);
 };
 
 export const createUser = async (userData) => {
-  const res = await API.post('/users', userData);
-  return res.data;
+  return await fbCreateUser(userData);
 };
 
 export const updateUser = async (id, userData) => {
-  const res = await API.put(`/users/${id}`, userData);
-  return res.data;
+  return await fbUpdateUser(id, userData);
 };
 
 export const deleteUser = async (id) => {
-  const res = await API.delete(`/users/${id}`);
-  return res.data;
+  return await fbDeleteUser(id);
 };
 
 export const getCategories = async () => {
-  const res = await API.get('/categories');
-  return res.data;
+  return await fbGetCategories();
 };
 
 export const createCategory = async (data) => {
-  const res = await API.post('/categories', data);
-  return res.data;
+  return await fbCreateCategory(data);
 };
 
 export const deleteCategory = async (id) => {
-  const res = await API.delete(`/categories/${id}`);
-  return res.data;
+  return await fbDeleteCategory(id);
 };

@@ -1,64 +1,74 @@
-import API from './api';
+import {
+  fbGetAvailableTests,
+  fbGetTestForAttempt,
+  fbGetAllTestsAdmin,
+  fbGetTestByIdAdmin,
+  fbCreateTest,
+  fbUpdateTest,
+  fbTogglePublishTest,
+  fbDeleteTest,
+  fbDeleteQuestion,
+  fbDuplicateTest,
+  fbUploadPdfFile,
+  parseQuestionPaperText,
+  fbSaveParsedTest
+} from '../firebase/dbService';
 
 export const getAvailableTests = async (params) => {
-  const res = await API.get('/tests', { params });
-  return res.data;
+  return await fbGetAvailableTests(params);
 };
 
 export const getTestForAttempt = async (testId) => {
-  const res = await API.get(`/tests/${testId}/take`);
-  return res.data;
+  return await fbGetTestForAttempt(testId);
 };
 
 // Admin Services
 export const getAllTestsAdmin = async (params) => {
-  const res = await API.get('/tests/admin/all', { params });
-  return res.data;
+  return await fbGetAllTestsAdmin(params);
 };
 
 export const getTestByIdAdmin = async (testId) => {
-  const res = await API.get(`/tests/${testId}`);
-  return res.data;
+  return await fbGetTestByIdAdmin(testId);
 };
 
 export const createTest = async (testData) => {
-  const res = await API.post('/tests', testData);
-  return res.data;
+  return await fbCreateTest(testData);
 };
 
 export const updateTest = async (testId, testData) => {
-  const res = await API.put(`/tests/${testId}`, testData);
-  return res.data;
+  return await fbUpdateTest(testId, testData);
 };
 
 export const togglePublishTest = async (testId) => {
-  const res = await API.post(`/tests/${testId}/publish`);
-  return res.data;
+  return await fbTogglePublishTest(testId);
 };
 
 export const deleteTest = async (testId) => {
-  const res = await API.delete(`/tests/${testId}`);
-  return res.data;
+  return await fbDeleteTest(testId);
+};
+
+export const deleteQuestion = async (qId) => {
+  return await fbDeleteQuestion(qId);
 };
 
 export const duplicateTest = async (testId) => {
-  const res = await API.post(`/tests/${testId}/duplicate`);
-  return res.data;
+  return await fbDuplicateTest(testId);
 };
 
 export const uploadPdf = async (formData) => {
-  const res = await API.post('/tests/upload-pdf', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  });
-  return res.data;
+  const file = formData.get('pdfFile');
+  if (!file) throw new Error('No PDF file provided');
+  return await fbUploadPdfFile(file);
 };
 
 export const processText = async (rawText) => {
-  const res = await API.post('/tests/process-text', { rawText });
-  return res.data;
+  const parsed = parseQuestionPaperText(rawText);
+  return {
+    message: 'Parsed raw text successfully',
+    parsedData: parsed
+  };
 };
 
 export const saveParsedTest = async (payload) => {
-  const res = await API.post('/tests/save-parsed-test', payload);
-  return res.data;
+  return await fbSaveParsedTest(payload);
 };
