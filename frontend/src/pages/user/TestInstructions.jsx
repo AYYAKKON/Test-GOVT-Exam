@@ -93,8 +93,9 @@ const TestInstructions = () => {
           </h2>
 
           <ul className="list-disc pl-5 space-y-2 leading-relaxed">
-            <li>The clock will be set at the server. The countdown timer in the top right corner of screen will display the remaining time available for you to complete each section.</li>
-            <li>When the timer for a section reaches zero, the test will automatically lock that section and move to the next section. You cannot return to a section once its time has expired.</li>
+            <li>The countdown timer in the top right corner of the screen will display the remaining time available for you to complete each section.</li>
+            <li><strong>Section Timers & Lock Policy:</strong> Each section can be opened only once per test with its own independent timer. When you complete a section early or when its timer expires, that section is permanently locked and you cannot return to it. The next section will begin fresh with its own allocated timer.</li>
+            <li>When the timer for a section reaches zero, the test will automatically lock that section and move to the next section.</li>
             <li>You can click on a question number in the Question Palette at the right of your screen to go to that question directly.</li>
             <li>
               <strong>Question Status Palette:</strong>

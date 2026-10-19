@@ -2,7 +2,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTestForAttempt } from '../../services/testService';
 import { submitTestAttempt } from '../../services/attemptService';
-import { Clock, ShieldAlert, CheckCircle, ChevronLeft, ChevronRight, Bookmark, RotateCcw, AlertTriangle, Send, Grid, X } from 'lucide-react';
+import {
+  Clock,
+  ShieldAlert,
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  Bookmark,
+  RotateCcw,
+  AlertTriangle,
+  Send,
+  Grid,
+  X,
+  Lock,
+  ArrowRight
+} from 'lucide-react';
 
 const TakeTest = () => {
   const { testId } = useParams();
@@ -21,16 +35,36 @@ const TakeTest = () => {
   const [visitedQuestions, setVisitedQuestions] = useState(new Set());
 
   // Timing state
-  const [sectionTimeLeft, setSectionTimeLeft] = useState(0); // in seconds
+  const [sectionTimeLeft, setSectionTimeLeft] = useState(0); // in seconds for CURRENT active section
   const [sectionTimeSpent, setSectionTimeSpent] = useState({}); // { sectionId: seconds }
-  const [completedSections, setCompletedSections] = useState(new Set());
+  const [completedSections, setCompletedSections] = useState(new Set()); // permanently locked sections
   const [startedAt] = useState(new Date().toISOString());
 
+  // Modals state
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showSectionConfirmModal, setShowSectionConfirmModal] = useState(false);
+  const [targetSectionIndex, setTargetSectionIndex] = useState(null);
   const [showMobilePalette, setShowMobilePalette] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const timerRef = useRef(null);
+  const currentSectionIndexRef = useRef(0);
+  const sectionsRef = useRef([]);
+  const completedSectionsRef = useRef(new Set());
+  const currentSectionRef = useRef(null);
+
+  // Synchronize refs to avoid stale closure issues in timer callbacks
+  useEffect(() => {
+    currentSectionIndexRef.current = currentSectionIndex;
+  }, [currentSectionIndex]);
+
+  useEffect(() => {
+    sectionsRef.current = sections;
+  }, [sections]);
+
+  useEffect(() => {
+    completedSectionsRef.current = completedSections;
+  }, [completedSections]);
 
   // 1. Fetch test details
   useEffect(() => {
@@ -38,12 +72,14 @@ const TakeTest = () => {
       try {
         const data = await getTestForAttempt(testId);
         setTest(data.test);
-        setSections(data.sections || []);
+        const secs = data.sections || [];
+        setSections(secs);
         setQuestions(data.questions || []);
 
-        if (data.sections && data.sections.length > 0) {
-          // Initialize first section time in seconds
-          setSectionTimeLeft(data.sections[0].duration * 60);
+        if (secs.length > 0) {
+          // Initialize first section with its own designated timer
+          const firstSecDuration = (parseInt(secs[0].duration, 10) || 15) * 60;
+          setSectionTimeLeft(firstSecDuration);
         }
       } catch (err) {
         console.error('Error fetching test:', err);
@@ -58,6 +94,11 @@ const TakeTest = () => {
 
   // Current Active Section & Questions
   const currentSection = sections[currentSectionIndex];
+
+  useEffect(() => {
+    currentSectionRef.current = currentSection;
+  }, [currentSection]);
+
   const sectionQuestions = currentSection
     ? questions.filter(q => q.sectionId.toString() === currentSection._id.toString())
     : [];
@@ -75,9 +116,9 @@ const TakeTest = () => {
     }
   }, [currentQuestion]);
 
-  // 2. Section Countdown Timer Effect
+  // 2. Countdown Timer Effect for the currently active section
   useEffect(() => {
-    if (loading || !currentSection || showSubmitModal) return;
+    if (loading || !currentSection || showSubmitModal || showSectionConfirmModal) return;
 
     timerRef.current = setInterval(() => {
       setSectionTimeLeft(prev => {
@@ -89,32 +130,69 @@ const TakeTest = () => {
         return prev - 1;
       });
 
-      if (currentSection) {
+      if (currentSectionRef.current) {
+        const secId = currentSectionRef.current._id.toString();
         setSectionTimeSpent(prev => ({
           ...prev,
-          [currentSection._id.toString()]: (prev[currentSection._id.toString()] || 0) + 1
+          [secId]: (prev[secId] || 0) + 1
         }));
       }
     }, 1000);
 
-    return () => clearInterval(timerRef.current);
-  }, [currentSectionIndex, loading, currentSection, showSubmitModal]);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [currentSectionIndex, loading, showSubmitModal, showSectionConfirmModal]);
 
   // Handle when section timer reaches 0
   const handleSectionTimeExpired = () => {
-    if (!currentSection) return;
+    const curIdx = currentSectionIndexRef.current;
+    const allSecs = sectionsRef.current;
+    const curSec = allSecs[curIdx];
+    if (!curSec) return;
 
-    setCompletedSections(prev => new Set(prev).add(currentSection._id.toString()));
+    // Permanently lock expired section
+    setCompletedSections(prev => new Set(prev).add(curSec._id.toString()));
 
-    if (currentSectionIndex < sections.length - 1) {
-      const nextIdx = currentSectionIndex + 1;
+    if (curIdx < allSecs.length - 1) {
+      const nextIdx = curIdx + 1;
+      const nextSec = allSecs[nextIdx];
+      const newDuration = (parseInt(nextSec.duration, 10) || 15) * 60;
+
       setCurrentSectionIndex(nextIdx);
       setCurrentQuestionIndex(0);
-      setSectionTimeLeft(sections[nextIdx].duration * 60);
-      alert(`Time expired for section "${currentSection.name}". Automatically moving to "${sections[nextIdx].name}".`);
+      setSectionTimeLeft(newDuration); // Fresh timer starts for next section!
+      alert(`Time expired for section "${curSec.name}". You are now moved to "${nextSec.name}". Allocated time: ${nextSec.duration || 15} minutes.`);
     } else {
       alert('Time expired for the final section! Submitting your test automatically.');
       handleSubmitTestFinal();
+    }
+  };
+
+  // Move to next section manually when candidate completes early
+  const handleCompleteCurrentSection = (targetIdx = null) => {
+    const curIdx = currentSectionIndexRef.current;
+    const allSecs = sectionsRef.current;
+    const curSec = allSecs[curIdx];
+    if (!curSec) return;
+
+    const nextIdx = targetIdx !== null ? targetIdx : curIdx + 1;
+
+    // Permanently lock current section - can only open once per test!
+    setCompletedSections(prev => new Set(prev).add(curSec._id.toString()));
+    setShowSectionConfirmModal(false);
+    setTargetSectionIndex(null);
+
+    if (nextIdx < allSecs.length) {
+      const nextSec = allSecs[nextIdx];
+      const newDuration = (parseInt(nextSec.duration, 10) || 15) * 60;
+
+      setCurrentSectionIndex(nextIdx);
+      setCurrentQuestionIndex(0);
+      setSectionTimeLeft(newDuration); // FRESH NEW TIMER FOR THIS SECTION!
+    } else {
+      // Reached beyond all sections -> Final Submission
+      setShowSubmitModal(true);
     }
   };
 
@@ -174,7 +252,18 @@ const TakeTest = () => {
         }));
       }
     }
-    handleNextQuestion();
+
+    if (currentQuestionIndex < sectionQuestions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+    } else {
+      // Reached the last question in this section
+      if (currentSectionIndex < sections.length - 1) {
+        setTargetSectionIndex(currentSectionIndex + 1);
+        setShowSectionConfirmModal(true);
+      } else {
+        setShowSubmitModal(true);
+      }
+    }
   };
 
   const handleNextQuestion = () => {
@@ -315,7 +404,7 @@ const TakeTest = () => {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none pb-12 lg:pb-0">
       
-      {/* Top Test Navigation Bar - Mobile Responsive */}
+      {/* Top Test Navigation Bar */}
       <header className="bg-slate-900 text-white px-3 sm:px-6 py-2.5 flex items-center justify-between border-b border-slate-800 sticky top-0 z-30 shadow-md">
         <div className="truncate mr-2">
           <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center gap-1.5 truncate">
@@ -329,7 +418,9 @@ const TakeTest = () => {
           <div className="bg-slate-800 border border-slate-700 px-2.5 sm:px-4 py-1 rounded-xl flex items-center gap-1.5 shadow-inner">
             <Clock className={`w-4 h-4 sm:w-5 sm:h-5 ${sectionTimeLeft < 180 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`} />
             <div>
-              <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-bold hidden sm:block">Time Remaining</div>
+              <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-bold hidden sm:block">
+                Section Timer: {currentSection?.name}
+              </div>
               <div className={`text-sm sm:text-lg font-black font-mono tracking-wider ${sectionTimeLeft < 180 ? 'text-red-400' : 'text-emerald-400'}`}>
                 {formatTime(sectionTimeLeft)}
               </div>
@@ -350,38 +441,57 @@ const TakeTest = () => {
             onClick={() => setShowSubmitModal(true)}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition shadow flex items-center gap-1"
           >
-            <Send className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Submit</span>
+            <Send className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Submit Test</span>
           </button>
         </div>
       </header>
 
-      {/* Section Switcher Tabs */}
-      <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-2 flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none">
-        <span className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-1">Sections:</span>
+      {/* Section Switcher Tabs - Strictly Enforcing One Visit Per Section */}
+      <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-2.5 flex items-center gap-2 overflow-x-auto scrollbar-none shadow-sm">
+        <span className="text-[11px] sm:text-xs font-extrabold text-slate-500 uppercase tracking-wider shrink-0 mr-1">Sections:</span>
         {sections.map((sec, idx) => {
           const isCompleted = completedSections.has(sec._id.toString());
           const isActive = idx === currentSectionIndex;
+          const isImmediateNext = idx === currentSectionIndex + 1;
 
           return (
             <button
               key={sec._id}
-              disabled={isCompleted}
+              disabled={isCompleted || isActive || !isImmediateNext}
               onClick={() => {
-                if (!isCompleted) {
-                  setCurrentSectionIndex(idx);
-                  setCurrentQuestionIndex(0);
+                if (isImmediateNext && !isCompleted) {
+                  setTargetSectionIndex(idx);
+                  setShowSectionConfirmModal(true);
                 }
               }}
-              className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg text-xs font-extrabold transition flex items-center gap-1 shrink-0 ${
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
                 isActive
-                  ? 'bg-indigo-600 text-white shadow'
+                  ? 'bg-indigo-600 text-white shadow ring-2 ring-indigo-400'
                   : isCompleted
-                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed line-through'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                  : isImmediateNext
+                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 cursor-pointer shadow-sm'
+                  : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed'
               }`}
             >
               <span>{sec.name}</span>
-              {isCompleted && <span className="text-[9px] bg-slate-300 px-1 rounded">Locked</span>}
+              {isCompleted ? (
+                <span className="text-[9px] bg-slate-200 text-slate-500 font-semibold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                  <Lock className="w-2.5 h-2.5" /> Locked
+                </span>
+              ) : isActive ? (
+                <span className="text-[9px] bg-indigo-700 text-indigo-100 px-1.5 py-0.5 rounded font-semibold">
+                  Active ({sec.duration || 15}m)
+                </span>
+              ) : isImmediateNext ? (
+                <span className="text-[9px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                  Next ({sec.duration || 15}m)
+                </span>
+              ) : (
+                <span className="text-[9px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">
+                  {sec.duration || 15}m
+                </span>
+              )}
             </button>
           );
         })}
@@ -395,8 +505,11 @@ const TakeTest = () => {
           
           {/* Question Header */}
           <div className="p-3 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs sm:text-sm">
-            <div className="font-extrabold text-slate-800">
-              Question {currentQuestionIndex + 1} of {sectionQuestions.length}
+            <div className="font-extrabold text-slate-800 flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded font-bold text-xs uppercase">
+                {currentSection?.name}
+              </span>
+              <span>Question {currentQuestionIndex + 1} of {sectionQuestions.length}</span>
             </div>
             <div className="text-[11px] sm:text-xs text-slate-500 font-semibold bg-white px-2.5 py-1 rounded-md border border-slate-200">
               Marks: <span className="text-emerald-600 font-bold">+1.0</span> | Negative: <span className="text-red-500 font-bold">0.0</span>
@@ -468,11 +581,33 @@ const TakeTest = () => {
               >
                 <ChevronLeft className="w-4 h-4" /> Prev
               </button>
+
+              {/* Complete Section Button (Enabled if candidate wants to complete section before timer runs out) */}
+              {currentSectionIndex < sections.length - 1 && (
+                <button
+                  onClick={() => {
+                    setTargetSectionIndex(currentSectionIndex + 1);
+                    setShowSectionConfirmModal(true);
+                  }}
+                  className="px-3 sm:px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 hover:text-amber-900 border border-amber-300 font-bold text-xs rounded-xl transition flex items-center gap-1 shadow-sm"
+                  title="Finish this section early and begin next section with its fresh timer"
+                >
+                  <span>Complete Section</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+
               <button
                 onClick={handleSaveAndNext}
                 className="px-4 sm:px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow transition flex items-center gap-1"
               >
-                <span>Save & Next</span>
+                <span>
+                  {currentQuestionIndex === sectionQuestions.length - 1
+                    ? currentSectionIndex < sections.length - 1
+                      ? 'Save & Complete Section'
+                      : 'Save & Submit Test'
+                    : 'Save & Next'}
+                </span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -483,7 +618,20 @@ const TakeTest = () => {
         <div className="hidden lg:flex bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex-col justify-between">
           {renderPaletteContent()}
 
-          <div className="pt-4 border-t border-slate-100">
+          <div className="pt-4 border-t border-slate-100 space-y-2">
+            {currentSectionIndex < sections.length - 1 && (
+              <button
+                onClick={() => {
+                  setTargetSectionIndex(currentSectionIndex + 1);
+                  setShowSectionConfirmModal(true);
+                }}
+                className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center justify-center gap-1.5"
+              >
+                <span>Complete "{currentSection?.name}"</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+
             <button
               onClick={() => setShowSubmitModal(true)}
               className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow transition"
@@ -508,7 +656,20 @@ const TakeTest = () => {
 
             {renderPaletteContent()}
 
-            <div className="pt-2 border-t border-slate-100">
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              {currentSectionIndex < sections.length - 1 && (
+                <button
+                  onClick={() => {
+                    setShowMobilePalette(false);
+                    setTargetSectionIndex(currentSectionIndex + 1);
+                    setShowSectionConfirmModal(true);
+                  }}
+                  className="w-full py-2 bg-amber-50 text-amber-800 border border-amber-300 font-bold text-xs uppercase rounded-xl"
+                >
+                  Complete "{currentSection?.name}" Early
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   setShowMobilePalette(false);
@@ -523,7 +684,55 @@ const TakeTest = () => {
         </div>
       )}
 
-      {/* Confirmation Modal */}
+      {/* Section Switch Confirmation Modal */}
+      {showSectionConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">Complete & Lock Section?</h3>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                You are about to complete <strong>"{currentSection?.name}"</strong> and proceed to <strong>"{sections[targetSectionIndex]?.name}"</strong>.
+              </p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-1.5">
+              <div className="font-bold flex items-center gap-1.5 text-amber-950">
+                <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
+                <span>Important Exam Rules:</span>
+              </div>
+              <p>
+                1. Once you leave <strong>"{currentSection?.name}"</strong>, this section will be <strong>permanently locked</strong> and cannot be opened again.
+              </p>
+              <p>
+                2. A fresh timer of <strong>{sections[targetSectionIndex]?.duration || 15} minutes</strong> will begin specifically for <strong>"{sections[targetSectionIndex]?.name}"</strong>.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowSectionConfirmModal(false);
+                  setTargetSectionIndex(null);
+                }}
+                className="w-1/2 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs uppercase rounded-xl transition"
+              >
+                Stay in Section
+              </button>
+              <button
+                onClick={() => handleCompleteCurrentSection(targetSectionIndex)}
+                className="w-1/2 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase rounded-xl shadow transition"
+              >
+                Lock & Proceed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Test Final Submit Confirmation Modal */}
       {showSubmitModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5">
