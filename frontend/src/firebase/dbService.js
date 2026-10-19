@@ -13,7 +13,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './config';
+import { db, storage } from './config.js';
 
 // Initial sample data for automatic seeding in Firestore
 const DEFAULT_CATEGORIES = [
